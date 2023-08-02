@@ -5,6 +5,7 @@ use crate::arpabet::*;
 pub enum JpPhoneme {
     Consonant(Consonant),
     Vowel(Vowel),
+    Space,
 }
 
 pub fn to_jp_phonemes(phonemes: &[EnPhoneme]) -> String {
@@ -13,7 +14,6 @@ pub fn to_jp_phonemes(phonemes: &[EnPhoneme]) -> String {
     let mut prev = None;
 
     for idx in 0..phonemes.len() {
-
         let send_to_next = |prev: &mut Option<EnConsonant>| {
             *prev = match &phonemes[idx] {
                 EnPhoneme::Consonant(consonant) => Some(consonant.to_owned()),
@@ -61,6 +61,12 @@ pub fn to_jp_phonemes(phonemes: &[EnPhoneme]) -> String {
                 prev = None;
             }
 
+            (Some(EnConsonant::D), EnPhoneme::Consonant(_) | EnPhoneme::Space) => {
+                result.push(JpPhoneme::Consonant(Consonant::D));
+                result.push(JpPhoneme::Vowel(Vowel::O));
+                send_to_next(&mut prev);
+            }
+
             (Some(consonant), EnPhoneme::Consonant(_) | EnPhoneme::Space) => {
                 if matches!(consonant, EnConsonant::NG) {
                     result.push(JpPhoneme::Consonant(Consonant::Nn));
@@ -90,6 +96,7 @@ pub fn to_jp_phonemes(phonemes: &[EnPhoneme]) -> String {
             EnPhoneme::Vowel(EnVowel::AW | EnVowel::OW, _) => {
                 result.push(JpPhoneme::Vowel(Vowel::U))
             }
+            EnPhoneme::Space => result.push(JpPhoneme::Space),
             _ => (),
         }
     }
@@ -109,6 +116,7 @@ pub fn to_jp_phonemes(phonemes: &[EnPhoneme]) -> String {
                     string.push_str(vowel_to_string(&vowel));
                 }
             }
+            JpPhoneme::Space => string.push_str(" "),
         }
     }
 
