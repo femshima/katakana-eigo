@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     preprocess(&mut sentence);
-    dbg!(jp_phoneme::to_jp_phonemes(&sentence));
+    dbg!(jp_phoneme::to_ja(&sentence));
 
     Ok(())
 }
