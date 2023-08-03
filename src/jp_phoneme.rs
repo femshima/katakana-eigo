@@ -1,4 +1,5 @@
 use jpreprocess_core::pronunciation::phoneme::{Consonant, Vowel};
+use jpreprocess_window::{IterQuintMut, Triple};
 
 use crate::arpabet::*;
 
@@ -6,9 +7,39 @@ pub enum JaPhoneme {
     Consonant(Consonant),
     Vowel(Vowel),
     Space,
+    None,
 }
 
 pub fn to_ja(phonemes: &[EnPhoneme]) -> String {
+    let mut phonemes = to_ja_phonemes(phonemes);
+    ja_to_ja(&mut phonemes);
+    add_vowel(&mut phonemes);
+
+    let mut prevc = None;
+    let mut string = String::new();
+    for curr in phonemes {
+        match curr {
+            JaPhoneme::Consonant(Consonant::Nn) => string.push_str("ン"),
+            JaPhoneme::Consonant(Consonant::Long) => string.push_str("ー"),
+            JaPhoneme::Consonant(consonant) => prevc = Some(consonant),
+            JaPhoneme::Vowel(vowel) => {
+                if let Some(consonant) = prevc {
+                    string.push_str(to_mora(&consonant, &vowel));
+                    prevc = None;
+                } else {
+                    string.push_str(vowel_to_string(&vowel));
+                }
+            }
+            JaPhoneme::Space => string.push_str(" "),
+
+            JaPhoneme::None => unreachable!(),
+        }
+    }
+
+    string
+}
+
+pub fn to_ja_phonemes(phonemes: &[EnPhoneme]) -> Vec<JaPhoneme> {
     let mut result = vec![];
 
     let mut prev = None;
@@ -30,15 +61,6 @@ pub fn to_ja(phonemes: &[EnPhoneme]) -> String {
             (_, EnPhoneme::None) => (),
             (None, EnPhoneme::Space) => (),
 
-            (Some(EnConsonant::N), EnPhoneme::Space | EnPhoneme::Consonant(_))
-            | (
-                Some(EnConsonant::M),
-                EnPhoneme::Consonant(EnConsonant::B | EnConsonant::P | EnConsonant::M),
-            ) => {
-                result.push(JaPhoneme::Consonant(Consonant::Nn));
-                send_to_next(&mut prev);
-            }
-
             (Some(EnConsonant::R), EnPhoneme::Space | EnPhoneme::Consonant(_))
                 if matches!(result.last(), Some(JaPhoneme::Vowel(Vowel::A))) =>
             {
@@ -46,41 +68,28 @@ pub fn to_ja(phonemes: &[EnPhoneme]) -> String {
                 send_to_next(&mut prev);
             }
 
-            (Some(EnConsonant::T), EnPhoneme::Consonant(EnConsonant::S))
-                if matches!(phonemes.get(idx + 1), None | Some(EnPhoneme::Space)) =>
-            {
-                result.push(JaPhoneme::Consonant(Consonant::Ts));
-                result.push(JaPhoneme::Vowel(Vowel::U));
-                prev = None;
+            (Some(EnConsonant::NG), EnPhoneme::Consonant(EnConsonant::CH | EnConsonant::K)) => {
+                result.push(JaPhoneme::Consonant(Consonant::Nn));
+                send_to_next(&mut prev);
             }
-            (Some(EnConsonant::D), EnPhoneme::Consonant(EnConsonant::Z))
-                if matches!(phonemes.get(idx + 1), None | Some(EnPhoneme::Space)) =>
-            {
-                result.push(JaPhoneme::Consonant(Consonant::Z));
-                result.push(JaPhoneme::Vowel(Vowel::U));
-                prev = None;
-            }
-
-            (Some(EnConsonant::D), EnPhoneme::Consonant(_) | EnPhoneme::Space) => {
-                result.push(JaPhoneme::Consonant(Consonant::D));
-                result.push(JaPhoneme::Vowel(Vowel::O));
+            (Some(EnConsonant::NG), EnPhoneme::Consonant(_)) => {
+                result.push(JaPhoneme::Consonant(Consonant::Nn));
+                result.push(JaPhoneme::Consonant(Consonant::G));
                 send_to_next(&mut prev);
             }
 
             (Some(consonant), EnPhoneme::Consonant(_) | EnPhoneme::Space) => {
-                if matches!(consonant, EnConsonant::NG) {
-                    result.push(JaPhoneme::Consonant(Consonant::Nn));
-                }
                 result.push(JaPhoneme::Consonant(katakana_consonant(&consonant)));
-                result.push(JaPhoneme::Vowel(Vowel::U));
                 send_to_next(&mut prev);
             }
 
             (Some(consonant), EnPhoneme::Vowel(vowel, _)) => {
                 if matches!(consonant, EnConsonant::NG) {
                     result.push(JaPhoneme::Consonant(Consonant::Nn));
+                    result.push(JaPhoneme::Consonant(Consonant::G));
+                } else {
+                    result.push(JaPhoneme::Consonant(katakana_consonant(&consonant)));
                 }
-                result.push(JaPhoneme::Consonant(katakana_consonant(&consonant)));
                 result.push(JaPhoneme::Vowel(katakana_vowel(&vowel)));
                 prev = None;
             }
@@ -100,27 +109,104 @@ pub fn to_ja(phonemes: &[EnPhoneme]) -> String {
             _ => (),
         }
     }
+    result
+}
 
-    let mut prevc = None;
-    let mut string = String::new();
-    for curr in result {
-        match curr {
-            JaPhoneme::Consonant(Consonant::Nn) => string.push_str("ン"),
-            JaPhoneme::Consonant(Consonant::Long) => string.push_str("ー"),
-            JaPhoneme::Consonant(consonant) => prevc = Some(consonant),
-            JaPhoneme::Vowel(vowel) => {
-                if let Some(consonant) = prevc {
-                    string.push_str(to_mora(&consonant, &vowel));
-                    prevc = None;
-                } else {
-                    string.push_str(vowel_to_string(&vowel));
+pub fn ja_to_ja(phonemes: &mut Vec<JaPhoneme>) {
+    let mut iter = IterQuintMut::new(phonemes);
+    while let Some(quint) = iter.next() {
+        let d = Triple::from(quint);
+        let (prev, curr) = match &d {
+            Triple::Last(
+                JaPhoneme::Consonant(Consonant::N),
+                JaPhoneme::Space | JaPhoneme::Consonant(_),
+            )
+            | Triple::Last(
+                JaPhoneme::Consonant(Consonant::M),
+                JaPhoneme::Consonant(Consonant::B | Consonant::P | Consonant::M),
+            )
+            | Triple::Full(
+                JaPhoneme::Consonant(Consonant::N),
+                JaPhoneme::Space | JaPhoneme::Consonant(_),
+                _,
+            )
+            | Triple::Full(
+                JaPhoneme::Consonant(Consonant::M),
+                JaPhoneme::Consonant(Consonant::B | Consonant::P | Consonant::M),
+                _,
+            ) => (Some(JaPhoneme::Consonant(Consonant::Nn)), None),
+
+            Triple::Full(
+                JaPhoneme::Consonant(Consonant::T),
+                JaPhoneme::Consonant(Consonant::S),
+                JaPhoneme::Space,
+            ) => (
+                Some(JaPhoneme::Consonant(Consonant::Ts)),
+                Some(JaPhoneme::Vowel(Vowel::U)),
+            ),
+            Triple::Full(
+                JaPhoneme::Consonant(Consonant::D),
+                JaPhoneme::Consonant(Consonant::Z),
+                JaPhoneme::Space,
+            ) => (
+                Some(JaPhoneme::Consonant(Consonant::Z)),
+                Some(JaPhoneme::Vowel(Vowel::U)),
+            ),
+
+            Triple::Full(
+                JaPhoneme::Consonant(Consonant::K),
+                JaPhoneme::Consonant(Consonant::Y),
+                JaPhoneme::Vowel(_),
+            ) => (
+                Some(JaPhoneme::Consonant(Consonant::Ky)),
+                Some(JaPhoneme::None),
+            ),
+
+            _ => (None, None),
+        };
+        match d {
+            Triple::Single(c) | Triple::First(c, _) => {
+                if let Some(curr) = curr {
+                    *c = curr;
                 }
             }
-            JaPhoneme::Space => string.push_str(" "),
+            Triple::Last(p, c) | Triple::Full(p, c, _) => {
+                if let Some(prev) = prev {
+                    *p = prev;
+                }
+                if let Some(curr) = curr {
+                    *c = curr;
+                }
+            }
         }
     }
 
-    string
+    phonemes.retain(|p| !matches!(p, JaPhoneme::None));
+}
+
+pub fn add_vowel(phonemes: &mut Vec<JaPhoneme>) {
+    let mut need_vowel = false;
+    let mut i = 0;
+    while i < phonemes.len() {
+        if need_vowel && !matches!(phonemes[i], JaPhoneme::Vowel(_)) {
+            let vowel = match &phonemes[i - 1] {
+                JaPhoneme::Consonant(Consonant::D) => Vowel::O,
+                JaPhoneme::Consonant(_) => Vowel::U,
+                _ => unreachable!(),
+            };
+            phonemes.insert(i, JaPhoneme::Vowel(vowel));
+            i += 1;
+        }
+
+        need_vowel = match phonemes[i] {
+            JaPhoneme::Consonant(Consonant::Long) => false,
+            JaPhoneme::Consonant(Consonant::Nn) => false,
+            JaPhoneme::Consonant(_) => true,
+            _ => false,
+        };
+
+        i += 1;
+    }
 }
 
 pub fn katakana_consonant(consonant: &EnConsonant) -> Consonant {
@@ -275,6 +361,11 @@ pub fn to_mora(katakana_consonant: &Consonant, katakana_vowel: &Vowel) -> &'stat
         (Consonant::Z, Vowel::E) => "ゼ",
         (Consonant::Z, Vowel::O) => "ゾ",
         (Consonant::Ts, Vowel::U) => "ツ",
+        (Consonant::Ky, Vowel::A) => "キャ",
+        (Consonant::Ky, Vowel::I) => "キ",
+        (Consonant::Ky, Vowel::U) => "キュ",
+        (Consonant::Ky, Vowel::E) => "ケ",
+        (Consonant::Ky, Vowel::O) => "キョ",
         _ => unreachable!(),
     }
 }
