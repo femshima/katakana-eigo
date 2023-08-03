@@ -13,7 +13,6 @@ pub fn preprocess(phonemes: &mut Vec<EnPhoneme>) {
                 if a == b =>
             {
                 *a = EnPhoneme::None;
-                *b = EnPhoneme::None;
             }
             // Flapping
             QuadForward::Full(a, b, d, c) if *d == EnPhoneme::Space => match (&a, &b, &c) {
