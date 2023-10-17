@@ -9,5 +9,5 @@ edition = "2021"
 strum = "0.25"
 strum_macros = "0.25"
 
-jpreprocess-core = "0.3.0"
-jpreprocess-window = "0.3.0"
+jpreprocess-core = "0.6.0"
+jpreprocess-window = "0.6.0"
