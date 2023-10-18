@@ -4,7 +4,7 @@ use arpabet::EnPhoneme;
 use prep::preprocess;
 
 pub mod arpabet;
-pub mod jp_phoneme;
+pub mod ja_phoneme;
 pub mod prep;
 
 pub struct KatakanaEigo {
@@ -46,6 +46,6 @@ impl KatakanaEigo {
             }
         }
         preprocess(&mut sentence);
-        jp_phoneme::to_ja(&sentence)
+        ja_phoneme::to_ja(&sentence)
     }
 }
