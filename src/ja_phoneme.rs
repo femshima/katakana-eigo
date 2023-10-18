@@ -190,7 +190,8 @@ pub fn add_vowel(phonemes: &mut Vec<JaPhoneme>) {
     while i < phonemes.len() {
         if need_vowel && !matches!(phonemes[i], JaPhoneme::Vowel(_)) {
             let vowel = match &phonemes[i - 1] {
-                JaPhoneme::Consonant(Consonant::D) => Vowel::O,
+                JaPhoneme::Consonant(Consonant::D | Consonant::T) => Vowel::O,
+                JaPhoneme::Consonant(Consonant::J) => Vowel::I,
                 JaPhoneme::Consonant(_) => Vowel::U,
                 _ => unreachable!(),
             };
@@ -243,7 +244,7 @@ pub fn katakana_vowel(vowel: &EnVowel) -> Vowel {
         EnVowel::AA => Vowel::A,
         EnVowel::AE => Vowel::A,
         EnVowel::AH => Vowel::A,
-        EnVowel::AO => Vowel::A,
+        EnVowel::AO => Vowel::O,
         EnVowel::AW => Vowel::A,
         EnVowel::AY => Vowel::A,
         EnVowel::EH => Vowel::E,
